@@ -72,14 +72,27 @@ def run(
         preprocessor.log_transform()
 
         # Impute missing values
+        if dataset_name == "breast-cancer-wisconsin":
+            import ipdb; ipdb.set_trace()
         preprocessor.impute()
+        if dataset_name == "breast-cancer-wisconsin":
+            ipdb.set_trace()
 
         # Dummy categorical columns
+        if dataset_name == "house-votes-84":
+            import ipdb; ipdb.set_trace()
         preprocessor.dummy()
+        if dataset_name == "house-votes-84":
+            ipdb.set_trace()
 
         # Discretize indicated columns
+        if dataset_name == "forestfires":
+            ff_data = preprocessor.data["x"]
+            ipdb.set_trace()
         preprocessor.discretize(discretize_dicts[dataset_name])
-
+        if dataset_name == "forestfires":
+            ff_data = preprocessor.data["x"]
+            ipdb.set_trace()
         # Randomize the order of the data
         preprocessor.shuffle(random_state=random_state)
 
@@ -108,12 +121,20 @@ def run(
             means, std_devs = get_standardization_params(data.copy()[cols])
 
             # Standardize data
+            if dataset_name == "forestfires" and fold == 1:
+                import ipdb; ipdb.set_trace()
             test = test.drop(axis=1, labels=cols).join(standardize(test[cols], means, std_devs))
+            if dataset_name == "forestfires" and fold == 1:
+                import ipdb; ipdb.set_trace()
             train_val = train_val.drop(axis=1, labels=cols).join(standardize(train_val[cols], means, std_devs))
 
             # Split train and validation sets
             train, val = split_train_val(train_val, problem_class, label_col, val_frac, random_state)
-
+            if (dataset_name == "breast-cancer-wisconsin") and fold==5:
+                train_bal = train.copy()["class"].value_counts() / len(train)
+                test_bal = test.copy()["class"].value_counts() / len(test)
+                val_bal = val.copy()["class"].value_counts() / len(val)
+                ipdb.set_trace()
             # Instantiate the model object
             predictor = MajorityPredictor(problem_class, label_col, feature_cols)
 
