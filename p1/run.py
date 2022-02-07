@@ -1,14 +1,13 @@
-"""Peter Rasmussen, Programming Assignment 2, run.py
+"""Peter Rasmussen, Programming Assignment 1, run.py
 
-The run function ingests user inputs of random seed and output directory and generates a set of
-candidate interweavings (s), x signals, and y signals. Each s, x, and y tuple is organized into a
-run. Each run is processed to find the longest interweaving of signals x and y, if they exist, in s.
+The run function ingests user inputs to train majority predictors on six different datasets.
 
 Outputs are saved to the user-specified directory.
 
 """
 
 # Standard library imports
+from collections import defaultdict
 import json
 import logging
 import os
@@ -40,12 +39,9 @@ def run(
     """
     dir_path = Path(os.path.dirname(os.path.realpath(__file__)))
     log_path = dir_path / "p1.log"
-
     with open(src_dir / "discretize.json") as file:
         discretize_dicts = json.load(file)
-
-    io_data_dst = dst_dir / "io_data.csv"
-    summary_stats_dst = dst_dir / "summary_stats.csv"
+    discretize_dicts = defaultdict(lambda: {}, discretize_dicts)
     log_format = "%(asctime)s - %(levelname)s - %(message)s"
     logging.basicConfig(filename=log_path, level=logging.DEBUG, format=log_format)
 
@@ -60,6 +56,7 @@ def run(
 
     # Loop over each dataset and its metadata using the data_catalog
     for dataset_name, dataset_meta in data_catalog.items():
+        logging.debug(f"Load and process dataset {dataset_name}.")
 
         # Load data: Set column names, data types, and replace values
         preprocessor = Preprocessor(dataset_name, dataset_meta, src_dir)
@@ -95,7 +92,6 @@ def run(
         # Define each column as a feature, label, or index
         feature_cols = preprocessor.features
         label_col = preprocessor.label
-        index_col = preprocessor.index
         problem_class = dataset_meta["problem_class"]  # regression or classification
         if problem_class == "classification":
             data[label_col] = data[label_col].astype(int)
@@ -116,7 +112,7 @@ def run(
             train_val = train_val.drop(axis=1, labels=cols).join(standardize(train_val[cols], means, std_devs))
 
             # Split train and validation sets
-            train, val = split_train_val(train_val, problem_class, index_col, label_col, val_frac, random_state)
+            train, val = split_train_val(train_val, problem_class, label_col, val_frac, random_state)
 
             # Instantiate the model object
             predictor = MajorityPredictor(problem_class, label_col, feature_cols)
@@ -133,7 +129,9 @@ def run(
             test_score = predictor.score(y_test_pred, y_test_truth)
             output_li = [dataset_name, problem_class, fold, test_score, predictor.beta]
             output.append(output_li)
+            logging.info(f"Dataset {dataset_name}: fold: {fold}, score: {test_score}.")
 
+    logging.debug("Process outputs.")
     # Organize outputs
     output_df = pd.DataFrame(output, columns=["dataset_name", "problem_class", "fold", "test_score", "beta"])
 

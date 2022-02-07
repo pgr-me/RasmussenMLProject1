@@ -182,7 +182,7 @@ class Preprocessor:
         :return: Folds dataframe
         """
         problem_class = self.dataset_meta["problem_class"]
-        folds: pd.DataFrame = make_splits(self.data, problem_class, self.index, self.label, k_folds)
+        folds: pd.DataFrame = make_splits(self.data, problem_class, self.label, k_folds)
         self.data = folds.join(self.data)
         return folds
 

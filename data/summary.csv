@@ -1,0 +1,7 @@
+problem_class,dataset_name,test_score
+classification,breast-cancer-wisconsin,0.66
+classification,car,0.7
+classification,house-votes-84,0.61
+regression,abalone,2.05
+regression,forestfires,0.15
+regression,machine,2.21

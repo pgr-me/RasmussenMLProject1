@@ -26,6 +26,9 @@ class MajorityPredictor:
         self.score_: float = None
         self.X_tr: pd.DataFrame = None
 
+        if self.problem_class not in ["classification", "regression"]:
+            raise ValueError("Problem class must be either 'classification' or 'regression'.")
+
     def train(self, X_train: pd.DataFrame, y_train: pd.Series) -> float:
         """
         Train the predictor on the data: take mode if classification else take mean.
@@ -63,18 +66,16 @@ class MajorityPredictor:
         """
         return pd.Series([self.beta for x in range(len(X))], index=X.index, name="pred")
 
-    def score(self, y_pred: pd.Series, y_truth: pd.Series, problem_class: str) -> float:
+    def score(self, y_pred: pd.Series, y_truth: pd.Series) -> float:
         """
         Score outputs using sum of squared error.
         :param y_pred: Predicted y
         :param y_truth: True y
-        :param problem_class: 'classification' or 'regression'
         :return: Score
         If regression compute MSE, otherwise estimate accuracy.
         """
-        if problem_class not in ["classification", "regression"]:
-            raise ValueError("Problem class must be either 'classification' or 'regression'.")
-        if problem_class == "regression":
+
+        if self.problem_class == "regression":
             self.score_ = np.sum(y_pred - y_truth) ** 2 / len(y_truth)
         else:
             self.score_ = (y_truth == y_pred).sum() / len(y_truth)

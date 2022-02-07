@@ -46,7 +46,9 @@ parser.add_argument(
 args = parser.parse_args()
 
 run(
-    args.number,
+    args.src_dir,
     args.dst_dir,
-    args.seed
+    args.k_folds,
+    args.val_frac,
+    args.random_state
 )
