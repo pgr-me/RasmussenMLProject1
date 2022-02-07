@@ -1,0 +1,1 @@
+from p1.algorithms.majority_predictor import MajorityPredictor

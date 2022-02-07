@@ -1,6 +1,6 @@
-# Peter Rasmussen, Programming Assignment 2
+# Peter Rasmussen, Programming Assignment 1
 
-This Python 3 program finds the longest interweaving, if it exists, of strings x and y in a string s. 
+This Python 3 program trains simple majority predictors across six datasets, using the mode as the estimator for classification datasets and the mean for regression datasets.
 
 ## Getting Started
 
@@ -9,45 +9,45 @@ The package is designed to be executed as a module from the command line. The us
 directory provides example output files - which echo the dynamically-generated input - for the user.
 
 ```shell
-python -m path/to/pa2  -o path/to/out_dir/ 
+python -m path/to/p1  -i path/to/in_dir -o path/to/out_dir/ -k <folds> -v <val frac> -r <random state>
 ```
 
-Finally, the user may specify the random seed used to generate the randomly distributed set of
-points, as the example below shows.
-
+As an example:
 ```shell
-python -m path/to/pa2 -o path/to/out_dir/ -s 777
+python -m path/to/p1  -i path/to/in_dir -o path/to/out_dir/ -k 5 -v 0.1 -r 777
 ```
 
 A summary of the command line arguments is below.
 
 Positional arguments:
 
-    -o, --dst_dir      Output directory
+    -i, --src_dir               Input directory
+    -o, --dst_dir               Output directory
 
 Optional arguments:    
 
-    -h, --help         Show this help message and exit
-    -n, --number       Max length of string s
-    -s, --seed         Provide pseudo-random seed
+    -h, --help                 Show this help message and exit
+    -k, --k_folds              Number of folds
+    -v, --val_frac             Fraction of validation observations
+    -r, --random_state         Provide pseudo-random seed
 
 ## Key parts of program
-* run module: Executes data generation, processing (i.e., finding interweaving), and post-processing.
-* DataMaker: Generates a list of pseudo-random binary integers.
-* Graph: Class that assimilates input data and finds the longest interweaving of x and y signals
+* run.py: Executes data loading, preprocessing, training, socring, and output creation.
+* preprocessor.py: Preprocesses data: loading, imputation, discretization, and fold assignment. 
+* majority_predictor.py: Trains and scores
+  * Classification datasets are scored on the basis of accuracy
+  * Regression datasets are scored on the basis of mean squared error
 
 ## Features
 
-* Performance metrics for each run for each algorithm: number of distance comparisons and total 
-  number of operations organized by run into a CSV output.
-* Tested on inputs of up to n=512 (recursion depth limits prevented larger inputs).
-* Outputs provided as two files: 1) CSV of performance metrics and 2) data input / output (IO) that
-  echoes inputs and provides full outputs, including interweaving of x and y.
-* Control over randomization by selection of random seed.
+* Performance metrics for each run for each dataset.
+* Tested on all six datasets.
+* Outputs provided as two files: 1) CSV of performance metrics by fold and 2) CSV of performance metrics by dataset.
+* Control over number of folds, validation fraction, and randomization.
 
 ## Output Files
 
-See the two files in the ```resources/outputs``` directory.
+See the ```output.csv``` and ```summary.csv``` files in the ```data/``` directory.
 
 ## Licensing
 

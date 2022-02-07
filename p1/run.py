@@ -8,92 +8,143 @@ Outputs are saved to the user-specified directory.
 
 """
 
-# standard library imports
-import csv
+# Standard library imports
+import json
 import logging
-import math
 import os
 from pathlib import Path
-import typing as t
 
-# local imports
-from pa2.datamaker import DataMaker
-from pa2.graph import Graph
-from pa2.utils import summarize, validate_candidate_interweaving
+# Third party imports
+import pandas as pd
+
+# Local imports
+from p1.preprocessing import Preprocessor, get_standardization_cols, get_standardization_params, standardize, split_train_val
+from p1.algorithms import MajorityPredictor
 
 
 def run(
-        n: int,
+        src_dir: Path,
         dst_dir: Path,
-        seed: int,
-
+        k_folds: int,
+        val_frac: float,
+        random_state: int,
 ):
     """
-    Symbolically combine polynomials and then evaluate for various evaluation sets.
-    :param n: Max size of s
+    Train and score a majority predictor across six datasets.
+    :param src_dir: Input directory that provides each dataset and params files
     :param dst_dir: Output directory
-    :param seed: Random number seed
+    :param k_folds: Number of folds to partition the data into
+    :param val_frac: Validation fraction of train-validation set
+    :param random_state: Random number seed
+
     """
     dir_path = Path(os.path.dirname(os.path.realpath(__file__)))
-    log_path = dir_path / "pa2.log"
+    log_path = dir_path / "p1.log"
+
+    with open(src_dir / "discretize.json") as file:
+        discretize_dicts = json.load(file)
+
     io_data_dst = dst_dir / "io_data.csv"
     summary_stats_dst = dst_dir / "summary_stats.csv"
     log_format = "%(asctime)s - %(levelname)s - %(message)s"
     logging.basicConfig(filename=log_path, level=logging.DEBUG, format=log_format)
 
-    logging.debug(f"Begin: n={n}, dst_dir={dst_dir.name}, seed={seed}")
 
-    logging.debug("Generate data")
-    n_li = []
-    for n_ in range(int(math.log(n, 2))):
-        n_li.append(2 ** n_)
+    logging.debug(f"Begin: src_dir={src_dir.name}, dst_dir={dst_dir.name}, seed={random_state}.")
 
-    x_len_li = [2, 4, 8, 16, 32]
-    y_len_li = [2, 4, 8, 16, 32]
-    run_number = 0
-    io_data = []
-    summary_stats = []
-    io_fields = ["s", "x", "y", "interweaving"]
+    with open(src_dir / "data_catalog.json", "r") as file:
+        data_catalog = json.load(file)
 
-    for s_len in n_li:
-        s: t.List[int] = DataMaker(s_len, seed=s_len).make_data()
-        logging.debug(f"Validate candidate interweaving for run={run_number} and s_len={s_len}")
-        validate_candidate_interweaving(s)
+    # Initialize the list to hold our outputs
+    output = []
 
-        # For each combination of s, x, and y signal lengths, make data, process it, & write outputs
-        for x_len in x_len_li:
-            x: t.List[int] = DataMaker(x_len, seed=x_len * 2 + 2).make_data()
-            for y_len in y_len_li:
-                y: t.List[int] = DataMaker(y_len, seed=x_len * 4 + 2).make_data()
-                if (x_len < s_len) and (y_len < s_len):
-                    msg = f"Run {run_number} for s_len={s_len}, x_len={x_len}, y_len={y_len}"
-                    logging.debug(msg)
-                    G = Graph(s, x, y)
-                    G.build_table()
-                    G.build_graph()
-                    G.find_max_rank_node()
-                    G.find_longest_path()
+    # Loop over each dataset and its metadata using the data_catalog
+    for dataset_name, dataset_meta in data_catalog.items():
 
-                    summary = summarize(G, run_number)
-                    io_data.append({k: v for k, v in summary.items()})
-                    summary_stats.append({k: v for k, v in summary.items() if k not in io_fields})
+        # Load data: Set column names, data types, and replace values
+        preprocessor = Preprocessor(dataset_name, dataset_meta, src_dir)
+        preprocessor.load()
 
-                    run_number += 1
+        # Identify which columns are features, which is the label, and any ID columns
+        preprocessor.identify_features_label_id()
 
-    logging.debug(f"Save IO data outputs to {io_data_dst.name}")
-    with open(io_data_dst, 'w', newline='') as csv_file:
-        fieldnames = list(io_data[0].keys())
-        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
-        writer.writeheader()
-        for row in io_data:
-            writer.writerow(row)
+        # Replace values: Ordinal strings (lower, higher) replace with numeric values
+        preprocessor.replace()
 
-    logging.debug(f"Save summary stats to {summary_stats_dst.name}")
-    with open(summary_stats_dst, 'w', newline='') as csv_file:
-        fieldnames = list(summary_stats[0].keys())
-        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
-        writer.writeheader()
-        for row in summary_stats:
-            writer.writerow(row)
+        # Log transform indicated columns (default is to take selected columns from dataset_meta)
+        preprocessor.log_transform()
+
+        # Impute missing values
+        preprocessor.impute()
+
+        # Dummy categorical columns
+        preprocessor.dummy()
+
+        # Discretize indicated columns
+        preprocessor.discretize(discretize_dicts[dataset_name])
+
+        # Randomize the order of the data
+        preprocessor.shuffle(random_state=random_state)
+
+        # Make K folds and assign each observation to one
+        preprocessor.make_folds(k_folds)
+
+        # Extract dataframe from preprocessor object
+        data = preprocessor.data.copy()
+
+        # Define each column as a feature, label, or index
+        feature_cols = preprocessor.features
+        label_col = preprocessor.label
+        index_col = preprocessor.index
+        problem_class = dataset_meta["problem_class"]  # regression or classification
+        if problem_class == "classification":
+            data[label_col] = data[label_col].astype(int)
+
+        # Iterate over each fold
+        for fold in range(1, k_folds + 1):
+            # Split test and train-validation sets
+            mask = data["fold"] == fold
+            test = data.copy()[mask]
+            train_val = data.copy()[~mask]
+
+            # Get standardization parameters from training-validation set
+            cols = get_standardization_cols(train_val, feature_cols)
+            means, std_devs = get_standardization_params(data.copy()[cols])
+
+            # Standardize data
+            test = test.drop(axis=1, labels=cols).join(standardize(test[cols], means, std_devs))
+            train_val = train_val.drop(axis=1, labels=cols).join(standardize(train_val[cols], means, std_devs))
+
+            # Split train and validation sets
+            train, val = split_train_val(train_val, problem_class, index_col, label_col, val_frac, random_state)
+
+            # Instantiate the model object
+            predictor = MajorityPredictor(problem_class, label_col, feature_cols)
+
+            # Train the model
+            predictor.train(train[feature_cols], train[label_col])
+
+            # Predict
+            predictor = MajorityPredictor(problem_class, label_col, feature_cols)
+            predictor.train(train[feature_cols], train[label_col])
+            predictor.tune(train[feature_cols], val[feature_cols], train[label_col], val[label_col])
+            y_test_pred = predictor.predict(test)
+            y_test_truth = test.copy()[label_col]
+            test_score = predictor.score(y_test_pred, y_test_truth)
+            output_li = [dataset_name, problem_class, fold, test_score, predictor.beta]
+            output.append(output_li)
+
+    # Organize outputs
+    output_df = pd.DataFrame(output, columns=["dataset_name", "problem_class", "fold", "test_score", "beta"])
+
+    # Compute mean test score across folds for each dataset
+    summary = output_df.groupby(["problem_class", "dataset_name"])["test_score"].mean().to_frame().round(2)
+
+    # Save outputs
+    logging.debug("Save outputs.")
+    output_dst = dst_dir / "output.csv"
+    summary_dst = dst_dir / "summary.csv"
+    output_df.to_csv(output_dst)
+    summary.to_csv(summary_dst)
 
     logging.debug("Finish.\n")

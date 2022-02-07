@@ -1,0 +1,1 @@
+{"breast-cancer-wisconsin": {"bare_nuclei": {"n_bins": 2, "binning": "equal_width"}, "normal_nucleoli": {"n_bins": 2, "binning": "equal_width"}}, "abalone": {"whole_weight": {"n_bins": 5, "binning": "equal_frequency"}}, "forestfires": {"x": {"n_bins": 2, "binning": "equal_frequency"}}}
